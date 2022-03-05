@@ -1,0 +1,329 @@
+import PushTypes.Companion.fromString
+import kotlin.math.pow
+import kotlin.math.sqrt
+
+fun main() {
+    //println("Введите 6 параметров системы")
+
+    /*val pushCountRange = 1..100_000
+    val pushTypeParamsCountRange = 3..6*/
+
+    var params: List<String>
+
+    val systemLocationPoint = LocationPoint()
+    val systemParams = PushSystemParams()
+
+    for (i in 1..6) {
+        params = readLine().toString().split(" ")
+
+        fillSystemParams(systemParams, systemLocationPoint, params)
+    }
+
+    systemParams.locationPoint = systemLocationPoint
+
+    val pushSystem = PushSystem(systemParams)
+
+    //println("Введите количество пушей в диапазоне $pushCountRange")
+
+    val pushCount: String = readLine().toString()
+
+    /*if (pushCount.toInt() !in pushCountRange) {
+        println("Количество пушей $pushCount за пределами диапазона $pushCountRange")
+        return
+    }*/
+
+    val pushTypeParams = PushTypeParams()
+
+    for (n in 1..pushCount.toInt()) {
+        //println("Введите количество параметров пуша №$n в диапазоне $pushTypeParamsCountRange")
+
+        val pushParamsCount: String = readLine().toString()
+
+        /*if (pushParamsCount.toInt() !in pushTypeParamsCountRange) {
+            println("Количество пушей $pushParamsCount за пределами диапазона $pushTypeParamsCountRange")
+            return
+        }
+
+        println("Введите $pushParamsCount параметров пуша №$n")*/
+
+        val pushLocationPoint = LocationPoint()
+
+        for (m in 1..pushParamsCount.toInt()) {
+            params = readLine().toString().split(" ")
+
+            fillPushTypeParams(pushTypeParams, pushLocationPoint, params)
+        }
+
+        pushTypeParams.locationPoint = pushLocationPoint
+
+        val pushType = PushFactory.createPushType(pushSystem, pushTypeParams)
+
+        pushSystem.addPush(
+            Push(pushTypeParams.text, pushType)
+        )
+    }
+
+    pushSystem.printFilteredPushes()
+}
+
+fun fillSystemParams(systemParams: PushSystemParams, systemLocationPoint: LocationPoint, params: List<String>) {
+    when (PushSystemParamNames.fromString(params[0])) {
+        PushSystemParamNames.TIME -> systemParams.time = params[1].toLong()
+        PushSystemParamNames.AGE -> systemParams.age = params[1].toInt()
+        PushSystemParamNames.OS_VERSION -> systemParams.osVersion = params[1].toInt()
+        PushSystemParamNames.X_COORD -> systemLocationPoint.x = params[1].toFloat()
+        PushSystemParamNames.Y_COORD -> systemLocationPoint.y = params[1].toFloat()
+        PushSystemParamNames.GENDER -> systemParams.gender = if (params[1] == Gender.M.value) Gender.M else Gender.F
+        else -> {}
+    }
+}
+
+fun fillPushTypeParams(pushTypeParams: PushTypeParams, pushLocationPoint: LocationPoint, params: List<String>) {
+    when (PushParamNames.fromString(params[0])) {
+        PushParamNames.AGE -> pushTypeParams.age = params[1].toInt()
+        PushParamNames.EXPIRY_DATE -> pushTypeParams.expiryDate = params[1].toLong()
+        PushParamNames.OS_VERSION -> pushTypeParams.osVersion = params[1].toInt()
+        PushParamNames.RADIUS -> pushTypeParams.radius = params[1].toInt()
+        PushParamNames.TEXT -> pushTypeParams.text = params[1]
+        PushParamNames.TYPE -> pushTypeParams.type = params[1]
+        PushParamNames.X_COORD -> pushLocationPoint.x = params[1].toFloat()
+        PushParamNames.Y_COORD -> pushLocationPoint.y = params[1].toFloat()
+        PushParamNames.GENDER -> pushTypeParams.gender = if (params[1] == Gender.M.value) Gender.M else Gender.F
+        else -> {}
+    }
+}
+
+enum class PushParamNames(val value: String) {
+    AGE("age"),
+    EXPIRY_DATE("expiry_date"),
+    GENDER("gender"),
+    OS_VERSION("os_version"),
+    RADIUS("radius"),
+    TEXT("text"),
+    TYPE("type"),
+    X_COORD("x_coord"),
+    Y_COORD("y_coord");
+
+    companion object {
+        fun fromString(text: String?): PushParamNames? {
+            for (b in values()) {
+                if (b.value.equals(text, ignoreCase = true)) {
+                    return b
+                }
+            }
+            return null
+        }
+    }
+}
+
+class PushTypeParams {
+    var age = 0
+    var expiryDate = 0L
+    var osVersion = 0
+    var radius = 0
+    var text = ""
+    var type = ""
+    lateinit var locationPoint: LocationPoint
+    lateinit var gender: Gender
+}
+
+enum class PushTypes(val value: String) {
+    AGE_SPECIFIC("AgeSpecificPush"),
+    GENDER_AGE("GenderAgePush"),
+    GENDER("GenderPush"),
+    LOCATION_AGE("LocationAgePush"),
+    LOCATION("LocationPush"),
+    TECH("TechPush");
+
+    companion object {
+        fun fromString(text: String?): PushTypes? {
+            for (b in values()) {
+                if (b.value.equals(text, ignoreCase = true)) {
+                    return b
+                }
+            }
+            return null
+        }
+    }
+}
+
+interface PushType {
+    val pushSystem: PushSystem
+
+    fun filter(): Boolean
+}
+
+interface AgePushType : PushType {
+
+    val age: Int
+
+    fun filterByAge() = age <= pushSystem.age
+
+}
+
+interface ExpiryPushType : PushType {
+    val expiryDate: Long
+
+    fun filterByExpiry() = expiryDate >= pushSystem.time
+
+}
+
+interface GenderPushType : PushType {
+    val gender: Gender
+
+    fun filterByGenre() = gender == pushSystem.gender
+}
+
+interface LocationPushType : PushType {
+    val locationPoint: LocationPoint
+    val radius: Int
+
+    fun filterByLocation(): Boolean {
+        val dist = sqrt(
+            (pushSystem.locationPoint.x - locationPoint.x).pow(2) + (pushSystem.locationPoint.y - locationPoint.y).pow(2)
+        )
+
+        return dist <= radius
+    }
+}
+
+interface TechPushType : PushType {
+    val osVersion: Int
+
+    fun filterByOsVersion() = pushSystem.osVersion <= osVersion
+}
+
+class AgeSpecificPush(
+    override val pushSystem: PushSystem,
+    override val age: Int,
+    override val expiryDate: Long
+) : AgePushType, ExpiryPushType {
+    override fun filter(): Boolean = filterByAge() && filterByExpiry()
+}
+
+class GenderAgePush(
+    override val pushSystem: PushSystem,
+    override val age: Int,
+    override val gender: Gender
+) : AgePushType, GenderPushType {
+    override fun filter(): Boolean = filterByAge() && filterByGenre()
+}
+
+class GenderPush(
+    override val pushSystem: PushSystem,
+    override val gender: Gender
+) : GenderPushType {
+    override fun filter() = filterByGenre()
+}
+
+class LocationAgePush(
+    override val pushSystem: PushSystem,
+    override val age: Int,
+    override val locationPoint: LocationPoint,
+    override val radius: Int
+) : LocationPushType, AgePushType {
+    override fun filter() = filterByAge() && filterByLocation()
+}
+
+class LocationPush(
+    override val pushSystem: PushSystem,
+    override val expiryDate: Long,
+    override val locationPoint: LocationPoint,
+    override val radius: Int
+) : ExpiryPushType, LocationPushType {
+    override fun filter() = filterByExpiry() && filterByLocation()
+}
+
+class TechPush(
+    override val pushSystem: PushSystem,
+    override val osVersion: Int
+) : TechPushType {
+    override fun filter() = filterByOsVersion()
+}
+
+enum class Gender(val value: String) {
+    M("m"),
+    F("f")
+}
+
+class LocationPoint {
+    var x: Float = 0f
+    var y: Float = 0f
+}
+
+class Push(
+    val text: String,
+    val type: PushType
+)
+
+object PushFactory {
+
+    fun createPushType(pushSystem: PushSystem, params: PushTypeParams): PushType {
+        return when (fromString(params.type)) {
+            PushTypes.AGE_SPECIFIC -> AgeSpecificPush(pushSystem, params.age, params.expiryDate)
+            PushTypes.GENDER_AGE -> GenderAgePush(pushSystem, params.age, params.gender)
+            PushTypes.GENDER -> GenderPush(pushSystem, params.gender)
+            PushTypes.LOCATION_AGE -> LocationAgePush(pushSystem, params.age, params.locationPoint, params.radius)
+            PushTypes.LOCATION -> LocationPush(pushSystem, params.expiryDate, params.locationPoint, params.radius)
+            PushTypes.TECH -> TechPush(pushSystem, params.osVersion)
+            else -> {
+                throw Throwable("Не найден тип пуша ${params.type}")
+            }
+        }
+    }
+
+}
+
+enum class PushSystemParamNames(val value: String) {
+    AGE("age"),
+    GENDER("gender"),
+    OS_VERSION("os_version"),
+    TIME("time"),
+    X_COORD("x_coord"),
+    Y_COORD("y_coord");
+
+    companion object {
+        fun fromString(text: String?): PushSystemParamNames? {
+            for (b in values()) {
+                if (b.value.equals(text, ignoreCase = true)) {
+                    return b
+                }
+            }
+            return null
+        }
+    }
+}
+
+class PushSystemParams {
+    var time: Long = 0L
+    var age: Int = 0
+    var osVersion: Int = 0
+    lateinit var locationPoint: LocationPoint
+    lateinit var gender: Gender
+}
+
+class PushSystem(params: PushSystemParams) {
+    val time = params.time
+    val age = params.age
+    val osVersion = params.osVersion
+    val locationPoint = params.locationPoint
+    val gender = params.gender
+
+    private val pushList: ArrayList<Push> = arrayListOf()
+
+    fun addPush(push: Push) {
+        pushList.add(push)
+    }
+
+    fun printFilteredPushes() {
+        val filteredPushList = pushList.filter { it.type.filter() }
+
+        if (filteredPushList.isEmpty()) {
+            println("-1")
+        } else {
+            filteredPushList.forEach {
+                println(it.text)
+            }
+        }
+    }
+}
